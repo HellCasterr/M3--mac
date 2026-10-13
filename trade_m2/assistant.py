@@ -271,7 +271,7 @@ class IndexQuotes:
                 response.raise_for_status()
                 payload = response.json()
             except (requests.RequestException, ValueError) as exc:
-                raise AssistantError("Upstox index quote failed. Reconnect if needed.", 502) from exc
+                raise AssistantError("Upstox index quote failed; reconnect.", 502) from exc
             data = payload.get("data", {})
             indices = []
             for name, key in INDEX_KEYS.items():
