@@ -19,4 +19,5 @@ jobs:
           cache: pip
       - run: python -m pip install -r requirements-dev.txt
       - run: ruff check .
+      - run: node --check trade_m2/static/assistant.js
       - run: python -m pytest --cov=trade_m2 --cov-report=term-missing
