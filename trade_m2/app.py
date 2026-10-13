@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .assistant import (AssistantError, ChatRequest, IndexQuotes, MAX_IMAGE_BYTES,
+                        PositionNotebook, PositionSet, answer_question, extract_positions)
 from .config import Settings, get_settings
 from .domain import IST, market_session_open
 from .history import AlertHistory, HistoricalData, HistoryError, HistoryQuery
@@ -77,6 +79,8 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     historical = HistoricalData(store, gateway)
     replay = ReplayJobs(store, gateway, historical)
     telegram = TelegramNotifier(settings, store)
+    assistant_notebook = PositionNotebook(store)
+    indices = IndexQuotes(gateway)
     oauth_states: dict[str, datetime] = {}
     oauth_lock = threading.RLock()
 
@@ -102,7 +106,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     @app.middleware("http")
     async def no_cache_local_terminal(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path in {"/", "/terminal", "/alerts-history", "/paper-guide", "/replay"} or (
+        if request.url.path in {"/", "/terminal", "/alerts-history", "/paper-guide", "/replay", "/assistant"} or (
             request.url.path.startswith("/static/")
         ):
             response.headers["Cache-Control"] = "no-store, max-age=0"
@@ -117,6 +121,8 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     app.state.paper = paper
     app.state.historical = historical
     app.state.replay = replay
+    app.state.assistant_notebook = assistant_notebook
+    app.state.indices = indices
 
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -124,6 +130,10 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(static_dir / "index.html")
+
+    @app.get("/assistant", include_in_schema=False)
+    def assistant_page() -> FileResponse:
+        return FileResponse(static_dir / "assistant.html")
 
     @app.get("/terminal", include_in_schema=False)
     def terminal() -> FileResponse:
@@ -184,6 +194,58 @@ def build_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=403, detail="Use the local Trade M3 terminal.")
         if request.headers.get("content-type", "").split(";")[0] != "application/json":
             raise HTTPException(status_code=415, detail="Use application/json.")
+
+    @app.get("/api/assistant/positions")
+    def assistant_positions():
+        return {"positions": assistant_notebook.list(), "source": "manually reviewed local data"}
+
+    @app.post("/api/assistant/positions")
+    def assistant_save_positions(payload: PositionSet, request: Request):
+        paper_request(request)
+        return {"positions": assistant_notebook.replace(payload.positions), "saved": True}
+
+    @app.delete("/api/assistant/positions")
+    def assistant_clear_positions(request: Request):
+        origin = request.headers.get("origin")
+        if origin and origin != str(request.base_url).rstrip("/"):
+            raise HTTPException(status_code=403, detail="Use the local application.")
+        if request.headers.get("x-m3-action") != "local":
+            raise HTTPException(status_code=403, detail="Missing local action header.")
+        assistant_notebook.clear()
+        return {"positions": [], "saved": True}
+
+    @app.post("/api/assistant/extract")
+    async def assistant_extract(request: Request, file: UploadFile = File(...)):
+        origin = request.headers.get("origin")
+        if origin and origin != str(request.base_url).rstrip("/"):
+            raise HTTPException(status_code=403, detail="Use the local application.")
+        if request.headers.get("x-m3-action") != "local":
+            raise HTTPException(status_code=403, detail="Missing local action header.")
+        try:
+            screenshot = await file.read(MAX_IMAGE_BYTES + 1)
+            return await asyncio.to_thread(extract_positions, screenshot)
+        except AssistantError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+        finally:
+            await file.close()
+
+    @app.get("/api/assistant/indices")
+    def assistant_indices():
+        try:
+            return indices.snapshot()
+        except AssistantError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+    @app.post("/api/assistant/chat")
+    def assistant_chat(payload: ChatRequest, request: Request):
+        paper_request(request)
+        try:
+            market = indices.snapshot()
+            return answer_question(
+                payload.message, payload.history, assistant_notebook.list(), market
+            )
+        except AssistantError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
     @app.put("/api/paper/settings")
     def paper_settings(payload: PaperSettings, request: Request):
