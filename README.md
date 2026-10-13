@@ -16,6 +16,34 @@ Edit .env (created from .env.example), register the Upstox OAuth callback http:/
 
 Connect Upstox from Stock alerts each trading day. The Python app runs locally in a web browser on Intel or Apple silicon; no signed .app/.dmg is provided. Windows scripts are retained for feature parity.
 
+## Market Assistant: stock prices and image chat update
+
+**Upstox stock/option quote access:** The assistant now retrieves full market quotes
+for all reviewed saved positions (plus optional extra NSE symbols). For options
+it resolves the exact underlying + strike + CE/PE + expiry through Upstox instrument
+search. If the exact contract does not exist, or its expiry is unreadable/expired,
+the system explicitly marks it UNRESOLVED/EXPIRED rather than substituting another.
+Stock quotes include previous close, last trade time, freshness, bid and ask when
+Upstox supplies them. LTP-based profit/loss is **indicative**, not a guaranteed fill.
+Quotes can be stale, especially on illiquid options and after market close.
+
+**Direct image uploads in the conversation:** Use + Attach screenshot or chart
+inside Ask about the market, then ask a question. The image goes to your configured
+OpenAI API on that request, and any extracted positions are provided only for that
+chat and follow-ups while the page is open. They are not committed to local SQLite
+unless you explicitly choose Review extracted positions in the table, correct the
+data, and press Confirm & save. Crop personally identifying broker details first.
+
+**Symbols outside your portfolio:** Type @GAIL in a question or enter GAIL, RELIANCE
+in Additional NSE symbols. These only trigger exact NSE equity lookups (and supported
+index names). The assistant cannot automatically scan arbitrary market charts or
+fetch market news; analyzing trends over time still requires historical candles.
+
+**Updated endpoints:** GET /api/assistant/quotes, POST /api/assistant/chat,
+POST /api/assistant/chat-image. Use the existing OpenAI and Upstox keys;
+no new API credentials are needed.
+
+---
 ## Market Assistant
 
 - Index cards: Nifty 50, Bank Nifty, Sensex fetched from Upstox V3. Show actual exchange LTP, previous close, points and percentage change, timestamps and freshness (not AI guesses). Refresh every 15 seconds with 12-second cache. Last quotes outside market hours are NOT live.
