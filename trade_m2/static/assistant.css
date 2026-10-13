@@ -33,3 +33,20 @@
 .chat-form .button{justify-self:end}
 @media(max-width:1000px){.assistant-columns{grid-template-columns:1fr}.chat-panel{position:static}}
 @media(max-width:680px){.market-grid{grid-template-columns:1fr}.assistant-actions .button{flex:1}}
+
+.assistant-quote-status{margin:12px 0 16px;border:1px solid var(--line);border-radius:12px;padding:12px}
+.assistant-quote-status .panel-heading{margin-bottom:8px}
+.assistant-quote-status strong{font-size:13px}
+.assistant-quote-status .muted{font-size:12px;margin:8px 0}
+.quote-summary{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.quote-line{border:1px solid var(--line);border-radius:9px;padding:9px;display:grid;gap:3px}
+.quote-line strong{font-size:12px}
+.quote-line small{color:var(--muted);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.quote-line .up{color:var(--green)}
+.quote-line.unavailable{border-left:2px solid var(--amber)}
+.chat-attach-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chat-attach-row label{cursor:pointer;font-size:13px;color:var(--text)}
+.chat-attach-row input[type=file]{font-size:12px;width:min(100%,240px);min-width:0}
+.chat-form>input{min-width:0;width:100%}
+#chatImagePreview{font-size:12px}
+.image-positions-review{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px}
