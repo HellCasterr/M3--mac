@@ -35,6 +35,10 @@ async function loadMarket() {
       if (q) {
         const change = make("small", q.change >= 0 ? "up" : "down", (q.change >= 0 ? "+" : "") + asMoney(q.change) + " (" + (q.change_percent >= 0 ? "+" : "") + q.change_percent.toFixed(2) + "%)");
         card.append(change);
+        if (q.session_open !== undefined) {
+          card.append(make("small", "", "Today O/H/L: " + asMoney(q.session_open) + " / " + asMoney(q.session_high) + " / " + asMoney(q.session_low)));
+          card.append(make("small", q.from_open_percent >= 0 ? "up" : "down", "From open: " + (q.from_open_percent >= 0 ? "+" : "") + q.from_open_percent.toFixed(2) + "%"));
+        }
         const stamp = make("small", "", (q.live ? "LIVE" : "LAST QUOTE") + (q.quote_time ? " · " + new Date(q.quote_time).toLocaleTimeString("en-IN", {timeZone: "Asia/Kolkata"}) + " IST" : " · Timestamp unavailable"));
         card.append(stamp);
       } else card.append(make("small", "", result.connected ? "Quote unavailable" : "Upstox not connected"));
