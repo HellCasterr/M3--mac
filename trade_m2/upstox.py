@@ -36,7 +36,7 @@ def _sdk() -> Any:
     try:
         import upstox_client
     except ImportError as exc:
-        raise UpstoxError("upstox-python-sdk is missing. Run setup_windows.bat again.") from exc
+        raise UpstoxError("upstox-python-sdk is missing. Run setup_mac.sh again.") from exc
     return upstox_client
 
 
