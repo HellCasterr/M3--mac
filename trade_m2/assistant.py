@@ -273,6 +273,25 @@ class IndexQuotes:
             except (requests.RequestException, ValueError) as exc:
                 raise AssistantError("Upstox index quote failed; reconnect.", 502) from exc
             data = payload.get("data", {})
+            # Session OHLC enriches index performance; unavailable OHLC never hides LTP.
+            ohlc_data: dict[str, Any] = {}
+            try:
+                candles_response = requests.get(
+                    "https://api.upstox.com/v3/market-quote/ohlc",
+                    params={
+                        "instrument_key": ",".join(INDEX_KEYS.values()),
+                        "interval": "1d",
+                    },
+                    headers={
+                        "Authorization": f"Bearer {self.gateway.access_token}",
+                        "Accept": "application/json",
+                    },
+                    timeout=12,
+                )
+                candles_response.raise_for_status()
+                ohlc_data = candles_response.json().get("data", {})
+            except (requests.RequestException, ValueError, AttributeError):
+                pass
             indices = []
             for name, key in INDEX_KEYS.items():
                 row = data.get(key) or data.get(key.replace("|", ":", 1))
@@ -304,7 +323,38 @@ class IndexQuotes:
                         age = max(0, int((now - quote_time).total_seconds()))
                     except (TypeError, ValueError, OverflowError):
                         pass
+                day = ohlc_data.get(key) or ohlc_data.get(key.replace("|", ":", 1))
+                if day is None:
+                    day = next((
+                        entry for entry in ohlc_data.values()
+                        if isinstance(entry, dict) and entry.get("instrument_token") == key
+                    ), None)
+                daily = day.get("live_ohlc", {}) if isinstance(day, dict) else {}
+                session_data = {}
+                if isinstance(daily, dict):
+                    try:
+                        candle_epoch = float(daily["ts"])
+                        session_date = datetime.fromtimestamp(
+                            candle_epoch / 1000 if candle_epoch > 100000000000 else candle_epoch,
+                            tz=UTC,
+                        ).astimezone(IST).date()
+                        open_price = Decimal(str(daily["open"]))
+                        high_price = Decimal(str(daily["high"]))
+                        low_price = Decimal(str(daily["low"]))
+                        if (session_date == now.date() and
+                                open_price > 0 and high_price >= low_price > 0):
+                            session_data = {
+                                "session_open": float(open_price),
+                                "session_high": float(high_price),
+                                "session_low": float(low_price),
+                                "from_open_percent": round(
+                                    float((ltp - open_price) / open_price * 100), 2
+                                ),
+                            }
+                    except (KeyError, ValueError, TypeError, InvalidOperation, OverflowError):
+                        pass
                 indices.append({
+                    **session_data,
                     "name": name, "instrument_key": key,
                     "ltp": float(ltp), "previous_close": float(cp),
                     "change": round(float(change), 2),
