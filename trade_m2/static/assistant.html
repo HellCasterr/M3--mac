@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#08110f">
+<title>Trade M3 · Market & Positions Assistant</title>
+<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/assistant.css">
+</head><body><main class="shell">
+<header class="hero">
+  <div><p class="eyebrow">TRADE M3 / MARKET & POSITIONS ASSISTANT</p><h1>Market Assistant</h1>
+  <p class="subtitle">Review screenshot-imported broker positions and discuss timestamped Nifty, Sensex and Bank Nifty quotes.</p></div>
+  <nav class="top-actions" aria-label="Main navigation">
+    <a class="button secondary" href="/">Stock alerts</a>
+    <a class="button secondary" href="/terminal">Paper terminal</a>
+    <a class="button secondary" href="/replay">Replay</a>
+    <a class="button secondary" href="/alerts-history">History</a>
+  </nav>
+</header>
+<p class="message" id="notice" role="status">Real broker positions on this page are separate from virtual paper trades. Nothing here places orders.</p>
+<section class="panel">
+<div class="panel-heading"><div><p class="section-label">INDEX PERFORMANCE · UPSTOX API</p><h2>Indian market snapshot</h2></div><button id="refreshMarket" class="button secondary" type="button">Refresh quotes</button></div>
+<div id="marketGrid" class="market-grid" aria-live="polite">
+<article class="status-card"><span>NIFTY 50</span><strong>—</strong><small>Waiting for Upstox</small></article>
+<article class="status-card"><span>BANK NIFTY</span><strong>—</strong><small>Waiting for Upstox</small></article>
+<article class="status-card"><span>SENSEX</span><strong>—</strong><small>Waiting for Upstox</small></article>
+</div>
+<p id="marketNote" class="muted">Connect Upstox from Stock alerts to retrieve exchange quotes. Prices refresh every 15 seconds while this page is open. During closed hours these are last observed quotes, not live movement.</p>
+</section>
+<div class="assistant-columns">
+<section class="panel">
+<div class="panel-heading"><div><p class="section-label">BROKER POSITIONS · REAL, MANUAL IMPORT</p><h2>My positions</h2></div></div>
+<p class="muted">Crop out account numbers and personal details. The screenshot is sent to your configured AI provider only when you select <strong>Extract screenshot</strong>. It is never saved by this app. All extracted rows require your review.</p>
+<form id="uploadForm" class="upload-form">
+  <label for="screenshot">Broker screenshot (PNG, JPG or WebP · max 5 MB)</label>
+  <input id="screenshot" name="file" type="file" accept="image/png,image/jpeg,image/webp" required>
+  <button class="button primary" id="extractButton" type="submit">Extract screenshot</button>
+</form>
+<p id="positionsNote" class="muted" role="status">You can also add a position manually. Verify option strike, CE/PE, side, total quantity, and average premium before saving.</p>
+<div class="table-wrap">
+<table class="positions-table"><thead><tr><th>Underlying</th><th>Contract / strike</th><th>Side</th><th>Units</th><th>Avg ₹</th><th>Screenshot LTP ₹</th><th>Expiry</th><th></th></tr></thead>
+<tbody id="positionRows"></tbody></table>
+</div>
+<div class="settings-actions assistant-actions">
+<button class="button secondary" id="addPosition" type="button">+ Add row</button>
+<button class="button primary" id="savePositions" type="button">Confirm & save positions</button>
+<button class="button secondary" id="clearPositions" type="button">Clear positions</button>
+</div>
+<p class="muted">Saved positions stay in your local SQLite database. Screenshot LTP is historical and is never treated as a live option quote. Saving here cannot change broker positions or paper trades.</p>
+</section>
+<section class="panel chat-panel">
+<div class="panel-heading"><div><p class="section-label">FOLLOW-UP QUESTIONS · AI</p><h2>Ask about the market</h2></div></div>
+<div class="quick-prompts" aria-label="Example questions">
+<button type="button" data-question="Summarise the current Nifty, Sensex and Bank Nifty index changes, using only available broker quotes.">Index snapshot</button>
+<button type="button" data-question="Review my saved broker positions. Describe exposures, relevant risks, and what information is missing.">Review positions</button>
+<button type="button" data-question="How might a bullish or bearish Nifty session affect my saved positions? Give conditional scenarios, not predictions.">Scenario analysis</button>
+</div>
+<div id="chatLog" class="chat-log" aria-live="polite"><p class="muted">Ask a question once your positions are saved, or discuss the live index snapshot. AI API key required for chat.</p></div>
+<form id="chatForm" class="chat-form">
+<label for="question">Question</label>
+<textarea id="question" rows="3" maxlength="4000" required placeholder="What is the market doing today, and how could it affect my positions?"></textarea>
+<button class="button primary" id="sendQuestion" type="submit">Send question</button>
+</form>
+<p id="chatStatus" class="muted" role="status">Index prices come from Upstox; AI interpretation is not a live tick feed or investment advice.</p>
+</section>
+</div>
+<footer><p>Local research assistant only · No real orders · Quotes may be delayed · Verify against your broker.</p><a href="/api/docs">API docs</a></footer>
+</main><script src="/static/assistant.js" defer></script></body></html>
