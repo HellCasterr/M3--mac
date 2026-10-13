@@ -294,7 +294,10 @@ class PositionQuotes:
                     buy = (depth.get("buy") or []) if isinstance(depth, dict) else []
                     sell = (depth.get("sell") or []) if isinstance(depth, dict) else []
                     bid = _number(buy[0].get("price")) if buy and isinstance(buy[0], dict) else None
-                    ask = _number(sell[0].get("price")) if sell and isinstance(sell[0], dict) else None
+                    ask = (
+                        _number(sell[0].get("price"))
+                        if sell and isinstance(sell[0], dict) else None
+                    )
                     enriched = {
                         **row, "status": "QUOTED", "ltp": float(ltp),
                         "prev_close": float(cp) if cp else None,
@@ -322,13 +325,16 @@ class PositionQuotes:
                             avg = _number(matching.get("average_price"))
                             qty = matching.get("quantity")
                             if avg and isinstance(qty, int) and qty > 0:
-                                signed = 1 if str(matching.get("side", "BUY")).upper() == "BUY" else -1
+                                signed = (
+                                    1 if str(matching.get("side", "BUY")).upper() == "BUY"
+                                    else -1
+                                )
                                 enriched["indicative_pnl"] = round(
                                     float((ltp - avg) * qty * signed), 2
                                 )
                                 enriched["indicative_only"] = True
                     base["prices"].append(enriched)
-        except (requests.RequestException, ValueError, TypeError) as exc:
+        except (requests.RequestException, ValueError, TypeError):
             base["notice"] = (
                 "Upstox price lookup failed. Check connection and retry; "
                 "no unverified price substituted."
