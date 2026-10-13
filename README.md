@@ -1,3 +1,48 @@
+# Trade M3 for macOS (Intel and Apple silicon)
+
+Preserves all source Trade-M3 features: Nifty 200 Case 2 alerts, sector insights, Telegram, paper terminal, next-minute virtual entries, replay, and history. Adds a Market Assistant at /assistant.
+
+**Visibility:** M3--mac is PUBLIC and Trade-M3 source is PRIVATE. Never commit credentials, screenshots, account details or local data.
+
+## Install on macOS
+
+Requires Python 3.11+ and Upstox API access. Clone the repo and run:
+
+    bash setup_mac.sh
+
+Edit .env (created from .env.example), register the Upstox OAuth callback http://127.0.0.1:8000/auth/upstox/callback, then run:
+
+    bash start_mac.command
+
+Connect Upstox from Stock alerts each trading day. The Python app runs locally in a web browser on Intel or Apple silicon; no signed .app/.dmg is provided. Windows scripts are retained for feature parity.
+
+## Market Assistant
+
+- Index cards: Nifty 50, Bank Nifty, Sensex fetched from Upstox V3. Show actual exchange LTP, previous close, points and percentage change, timestamps and freshness (not AI guesses). Refresh every 15 seconds with 12-second cache. Last quotes outside market hours are NOT live.
+- Screenshot import: upload a cropped PNG/JPEG/WebP broker positions screenshot up to 5MB. OpenAI vision extracts editable positions. The screenshot is processed in memory and is not saved.
+- You must review and explicitly save extracted positions. Correct symbol, contract/strike/CE/PE, BUY/SELL, total units, average premium, and expiry. Manually add or remove rows. Saved rows live in local SQLite, excluded from Git.
+- Actual broker positions in this notebook are entirely SEPARATE from paper terminal simulated trades. Screenshot option LTP is historical and never a real-time quote.
+- Chat: ask follow-ups about saved positions or index performance. The AI receives the saved rows and latest timestamped Upstox snapshot. It cannot place, alter or cancel any broker order.
+
+## Required and optional API keys
+
+Add to your local .env:
+
+    UPSTOX_API_KEY=your_upstox_app_key
+    UPSTOX_API_SECRET=your_upstox_app_secret
+    UPSTOX_REDIRECT_URL=http://127.0.0.1:8000/auth/upstox/callback
+    # Optional for screenshot extraction and AI chat:
+    OPENAI_API_KEY=your_openai_platform_api_key
+    OPENAI_VISION_MODEL=gpt-4.1-mini
+    OPENAI_CHAT_MODEL=gpt-4.1-mini
+
+Upstox is required for the original scanner, option replay and current index cards. No separate NSE/BSE API key is needed for these indices if Upstox provides entitlement. An OpenAI Platform API key is required only for screenshot extraction and AI chat, and billed separately from ChatGPT subscriptions. Telegram credentials are optional and used only for alerts.
+
+**Privacy:** Crop broker account numbers and identifiers before upload. Extraction sends image data to the configured OpenAI API, and chat sends imported positions plus broker market snapshots to the AI provider. Check its data policies. Keep the local service bound to 127.0.0.1, do not expose port 8000 publicly, and do not commit .env.
+
+**Safety:** No live broker orders. Imported positions and AI analysis do not change the paper terminal. Verify data with your broker before any financial decision.
+
+---
 # Trade M3
 
 Built from Trade M2, with live sector context and a durable alert review log.
