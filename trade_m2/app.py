@@ -13,13 +13,21 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .assistant import (AssistantError, ChatRequest, IndexQuotes, MAX_IMAGE_BYTES,
-                        PositionNotebook, PositionSet, answer_question, extract_positions)
+from .assistant import (
+    MAX_IMAGE_BYTES,
+    AssistantError,
+    ChatRequest,
+    IndexQuotes,
+    PositionNotebook,
+    PositionSet,
+    answer_question,
+    extract_positions,
+)
 from .config import Settings, get_settings
 from .domain import IST, market_session_open
 from .history import AlertHistory, HistoricalData, HistoryError, HistoryQuery
@@ -106,9 +114,8 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     @app.middleware("http")
     async def no_cache_local_terminal(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path in {"/", "/terminal", "/alerts-history", "/paper-guide", "/replay", "/assistant"} or (
-            request.url.path.startswith("/static/")
-        ):
+        pages = {"/", "/terminal", "/alerts-history", "/paper-guide", "/replay", "/assistant"}
+        if request.url.path in pages or request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "no-store, max-age=0"
         return response
 
@@ -215,7 +222,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
         return {"positions": [], "saved": True}
 
     @app.post("/api/assistant/extract")
-    async def assistant_extract(request: Request, file: UploadFile = File(...)):
+    async def assistant_extract(request: Request, file: UploadFile):
         origin = request.headers.get("origin")
         if origin and origin != str(request.base_url).rstrip("/"):
             raise HTTPException(status_code=403, detail="Use the local application.")
