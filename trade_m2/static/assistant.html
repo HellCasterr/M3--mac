@@ -54,13 +54,33 @@
 <button type="button" data-question="Review my saved broker positions. Describe exposures, relevant risks, and what information is missing.">Review positions</button>
 <button type="button" data-question="How might a bullish or bearish Nifty session affect my saved positions? Give conditional scenarios, not predictions.">Scenario analysis</button>
 </div>
+<div class="assistant-quote-status">
+  <div class="panel-heading">
+    <strong>Upstox stock and option prices</strong>
+    <button type="button" id="refreshPositionsQuotes" class="button secondary small">Refresh</button>
+  </div>
+  <div id="positionQuotes" class="quote-summary" role="status">Connect Upstox to fetch prices of saved positions.</div>
+  <p class="muted">Exact contract matching only. A stale or closed-market quote is not an executable price. For other stocks, type @RELIANCE or enter NSE tickers below.</p>
+</div>
 <div id="chatLog" class="chat-log" aria-live="polite"><p class="muted">Ask a question once your positions are saved, or discuss the live index snapshot. AI API key required for chat.</p></div>
 <form id="chatForm" class="chat-form">
 <label for="question">Question</label>
-<textarea id="question" rows="3" maxlength="4000" required placeholder="What is the market doing today, and how could it affect my positions?"></textarea>
+<textarea id="question" rows="3" maxlength="4000" placeholder="Should I hold my saved options? Check the exact contracts' Upstox quotes."></textarea>
+<label for="extraSymbols">Additional NSE symbols (optional)</label>
+<input id="extraSymbols" type="text" maxlength="200" placeholder="GAIL, RELIANCE, INFY">
+<div class="chat-attach-row">
+  <label class="button secondary" for="chatImage">+ Attach screenshot or chart</label>
+  <input id="chatImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Attach screenshot to chat">
+  <button type="button" id="removeChatImage" class="button secondary small" hidden>Remove image</button>
+</div>
+<div id="chatImagePreview" class="muted" role="status">No image attached. Attach images directly to the conversation (max 5MB).</div>
 <button class="button primary" id="sendQuestion" type="submit">Send question</button>
 </form>
-<p id="chatStatus" class="muted" role="status">Index prices come from Upstox; AI interpretation is not a live tick feed or investment advice.</p>
+<div id="imagePositionsReview" class="image-positions-review" hidden>
+  <p class="muted" id="imagePositionsNote"></p>
+  <button id="useChatPositions" class="button secondary small" type="button">Review extracted positions in the table</button>
+</div>
+<p id="chatStatus" class="muted" role="status">Stock and option prices come from Upstox; AI interpretation is not an executable trade quote. No orders are placed.</p>
 </section>
 </div>
 <footer><p>Local research assistant only · No real orders · Quotes may be delayed · Verify against your broker.</p><a href="/api/docs">API docs</a></footer>
