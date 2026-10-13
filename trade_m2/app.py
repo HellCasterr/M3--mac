@@ -16,7 +16,7 @@ from urllib.parse import quote
 from fastapi import FastAPI, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .assistant import (
     MAX_IMAGE_BYTES,
@@ -28,6 +28,7 @@ from .assistant import (
     answer_question,
     extract_positions,
 )
+from .assistant_quotes import PositionQuotes
 from .config import Settings, get_settings
 from .domain import IST, market_session_open
 from .history import AlertHistory, HistoricalData, HistoryError, HistoryQuery
@@ -89,6 +90,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     telegram = TelegramNotifier(settings, store)
     assistant_notebook = PositionNotebook(store)
     indices = IndexQuotes(gateway)
+    position_quotes = PositionQuotes(gateway)
     oauth_states: dict[str, datetime] = {}
     oauth_lock = threading.RLock()
 
@@ -130,6 +132,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     app.state.replay = replay
     app.state.assistant_notebook = assistant_notebook
     app.state.indices = indices
+    app.state.position_quotes = position_quotes
 
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -243,25 +246,107 @@ def build_app(settings: Settings | None = None) -> FastAPI:
         except AssistantError as exc:
             raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
+    @app.get("/api/assistant/quotes")
+    def assistant_stock_quotes(symbols: str = Query(default="", max_length=200)):
+        return position_quotes.snapshot(
+            assistant_notebook.list(), extra_symbols=symbols.split(",") if symbols else []
+        )
+
+    def assistant_market(positions, question, extra_symbols):
+        try:
+            market = indices.snapshot()
+        except AssistantError:
+            market = {
+                "connected": False, "market_open": False, "indices": [],
+                "as_of": datetime.now(IST).isoformat(),
+                "notice": "Index lookup unavailable; no index prices supplied.",
+            }
+        market["stock_quotes"] = position_quotes.snapshot(
+            positions, question=question, extra_symbols=extra_symbols
+        )
+        return market
+
+    def all_assistant_positions(payload: ChatRequest):
+        saved = assistant_notebook.list()
+        session = [
+            {**p.model_dump(mode="json"), "source": "chat image (unverified)"}
+            for p in payload.session_positions
+        ]
+        return saved + session
+
     @app.post("/api/assistant/chat")
     def assistant_chat(payload: ChatRequest, request: Request):
         paper_request(request)
         try:
-            try:
-                market = indices.snapshot()
-            except AssistantError:
-                market = {
-                    "connected": False,
-                    "market_open": False,
-                    "indices": [],
-                    "as_of": datetime.now(IST).isoformat(),
-                    "notice": "Upstox index quotes temporarily unavailable; no live prices.",
-                }
-            return answer_question(
-                payload.message, payload.history, assistant_notebook.list(), market
-            )
+            positions = all_assistant_positions(payload)
+            market = assistant_market(positions, payload.message, payload.symbols)
+            return answer_question(payload.message, payload.history, positions, market)
         except AssistantError as exc:
             raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+    @app.post("/api/assistant/chat-image")
+    async def assistant_chat_image(request: Request):
+        origin = request.headers.get("origin")
+        if origin and origin != str(request.base_url).rstrip("/"):
+            raise HTTPException(status_code=403, detail="Use the local application.")
+        if request.headers.get("x-m3-action") != "local":
+            raise HTTPException(status_code=403, detail="Missing local action header.")
+        try:
+            form = await request.form()
+            upload = form.get("file")
+            if not upload or not hasattr(upload, "read"):
+                raise HTTPException(status_code=422, detail="Choose an image attachment.")
+            try:
+                payload = ChatRequest.model_validate({
+                    "message": form.get("message"),
+                    "history": json.loads(str(form.get("history") or "[]")),
+                    "symbols": json.loads(str(form.get("symbols") or "[]")),
+                    "session_positions": json.loads(
+                        str(form.get("session_positions") or "[]")
+                    ),
+                })
+            except (ValueError, TypeError, ValidationError) as exc:
+                raise HTTPException(status_code=422, detail="Invalid chat fields.") from exc
+            screenshot = await upload.read(MAX_IMAGE_BYTES + 1)
+            if len(screenshot) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=413, detail="Image must be at most 5 MB.")
+            import_result = {"positions": [], "rejected": 0}
+            recognition_notice = ""
+            try:
+                import_result = await asyncio.to_thread(extract_positions, screenshot)
+            except AssistantError:
+                recognition_notice = "Position extraction unavailable; image still sent to chat."
+            all_saved = assistant_notebook.list()
+            ephemeral = [
+                {**p.model_dump(mode="json"), "source": "chat image (unverified)"}
+                for p in payload.session_positions
+            ]
+            if import_result["positions"]:
+                ephemeral = [
+                    {**p, "source": "chat image (unverified)"}
+                    for p in import_result["positions"]
+                ]
+            positions = all_saved + ephemeral
+            market = await asyncio.to_thread(
+                assistant_market, positions, payload.message, payload.symbols
+            )
+            result = await asyncio.to_thread(
+                answer_question, payload.message, payload.history, positions,
+                market, screenshot
+            )
+            result["recognized_positions"] = import_result["positions"]
+            result["image_review_required"] = bool(import_result["positions"])
+            result["image_note"] = (
+                recognition_notice or
+                "Screenshot rows are for chat only, not saved or verified."
+            )
+            return result
+        except AssistantError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+        finally:
+            upload_file = locals().get("upload")
+            if upload_file is not None and hasattr(upload_file, "close"):
+                await upload_file.close()
 
     @app.put("/api/paper/settings")
     def paper_settings(payload: PaperSettings, request: Request):
