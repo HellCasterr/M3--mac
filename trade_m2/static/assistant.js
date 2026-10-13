@@ -4,6 +4,8 @@ let positions = [];
 let history = [];
 let marketBusy = false;
 let chatBusy = false;
+let sessionPositions = [];
+let lastImagePositions = [];
 
 async function api(url, options = {}) {
   const response = await fetch(url, {cache: "no-store", ...options});
@@ -87,7 +89,7 @@ function drawPositions() {
   }
 }
 async function loadPositions() {
-  try {const result = await api("/api/assistant/positions");positions = result.positions || [];drawPositions();}
+  try {const result = await api("/api/assistant/positions");positions = result.positions || [];drawPositions();refreshPositionQuotes();}
   catch (error) {setNote("positionsNote", error.message);}
 }
 
@@ -121,36 +123,147 @@ $("savePositions").addEventListener("click", async () => {
     }));
     if (data.some(p => !p.symbol || !Number.isInteger(p.quantity) || !Number.isFinite(p.average_price) || p.average_price <= 0)) throw new Error("Check symbol, total units and average premium for every row.");
     const r = await api("/api/assistant/positions", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({positions:data})});
-    positions = r.positions || [];drawPositions();setNote("positionsNote", positions.length + " positions saved in local SQLite. These are NOT broker orders.");
+    positions = r.positions || [];drawPositions();refreshPositionQuotes();setNote("positionsNote", positions.length + " positions saved in local SQLite. These are NOT broker orders.");
   } catch(error){setNote("positionsNote", error.message);}
 });
 $("clearPositions").addEventListener("click", async () => {
   if (!confirm("Clear your imported position notebook? This does not affect broker or paper positions.")) return;
   try {
     await api("/api/assistant/positions", {method:"DELETE",headers:{"X-M3-Action":"local"}});
-    positions=[];drawPositions();setNote("positionsNote","Imported positions cleared locally.");
+    positions=[];drawPositions();refreshPositionQuotes();setNote("positionsNote","Imported positions cleared locally.");
   }catch(error){setNote("positionsNote",error.message);}
 });
 
-function bubble(role, text) {
-  const log = $("chatLog");if(!history.length && log.querySelector(".muted"))log.replaceChildren();
-  log.append(make("div", "chat-bubble " + role, text));log.scrollTop = log.scrollHeight;
+async function refreshPositionQuotes() {
+  try {
+    const symbols = ($("extraSymbols")?.value || "").trim();
+    const data = await api("/api/assistant/quotes" + (symbols ? "?symbols=" + encodeURIComponent(symbols) : ""));
+    const target = $("positionQuotes"); target.replaceChildren();
+    if (!data.connected) {
+      target.append(make("p", "muted", "Upstox disconnected. Connect on Stock alerts."));
+      return;
+    }
+    const quotes = (data.prices || []).filter(q => q.instrument_kind !== "UNDERLYING");
+    if (!quotes.length && !data.unavailable?.length) {
+      target.append(make("p", "muted", "No saved positions. Add one or enter an NSE symbol."));
+    }
+    for (const q of quotes) {
+      const line = make("div", "quote-line");
+      const title = (q.trading_symbol || q.symbol) + " · ₹" + asMoney(q.ltp);
+      const details = q.fresh ? "Recent last trade" : q.quote_label;
+      line.append(make("strong", "", title));
+      line.append(make("small", q.fresh ? "up" : "muted",
+        details + (q.change_percent == null ? "" : " · " +
+        (q.change_percent >= 0 ? "+" : "") + q.change_percent + "% vs prev close")));
+      if (q.instrument_kind === "OPTION") {
+        line.append(make("small", "muted", "Matched " + q.instrument_key +
+          (q.indicative_pnl == null ? "" : " · LTP P&L approx ₹" + asMoney(q.indicative_pnl))));
+      }
+      target.append(line);
+    }
+    for (const q of (data.unavailable || [])) {
+      const line = make("div", "quote-line unavailable");
+      line.append(make("strong", "", q.symbol + " · " + (q.contract || "Equity")));
+      line.append(make("small", "muted", q.reason || "Price unavailable"));
+      target.append(line);
+    }
+    setNote("chatStatus", (data.notice || "") + " Retrieved " +
+      new Date(data.as_of).toLocaleTimeString("en-IN", {timeZone:"Asia/Kolkata"}) + " IST.");
+  } catch (error) {
+    setNote("chatStatus", "Upstox quote lookup: " + error.message);
+  }
+}
+function bubble(role, content) {
+  const log = $("chatLog");
+  if (!history.length && log.querySelector(".muted")) log.replaceChildren();
+  const text = make("div", "chat-bubble " + role, content);
+  log.append(text);log.scrollTop = log.scrollHeight;
+}
+function pendingSymbols() {
+  return ($("extraSymbols").value || "").split(",")
+    .map(item => item.trim().toUpperCase().replace(/^@/,""))
+    .filter(item => /^[A-Z][A-Z0-9&.\-]{0,28}$/.test(item)).slice(0,8);
 }
 async function sendQuestion(question) {
-  if (chatBusy || !question.trim()) return;
+  const image = $("chatImage").files[0];
+  if (chatBusy || (!question.trim() && !image)) return;
+  if (image && image.size > 5*1024*1024) {
+    setNote("chatStatus","Image size must not exceed 5 MB.");return;
+  }
   chatBusy = true;$("sendQuestion").disabled = true;
   const previous = history.slice(-10);
-  bubble("user", question);history.push({role:"user",content:question});
-  setNote("chatStatus", "Analysing stored positions and current Upstox index snapshot…");
+  const message = question.trim() || "Analyse this attached image.";
+  bubble("user", message + (image ? "\n📎 " + image.name : ""));
+  setNote("chatStatus", image ? "Reading attached screenshot and Upstox quotes…" :
+    "Checking live broker quotes and saved positions…");
   try {
-    const result = await api("/api/assistant/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:question,history:previous})});
-    bubble("assistant", result.answer);history.push({role:"assistant",content:result.answer});
-    setNote("chatStatus", "Market snapshot: " + new Date(result.market_as_of).toLocaleString("en-IN", {timeZone:"Asia/Kolkata"}) + " IST · Cross-check all trading decisions.");
-    loadMarket();
-  } catch (error) {bubble("assistant", "Unable to answer: " + error.message);setNote("chatStatus",error.message);}
-  finally {chatBusy=false;$("sendQuestion").disabled=false;}
+    let result;
+    if (image) {
+      const form = new FormData();
+      form.append("file", image);
+      form.append("message", message);
+      form.append("history", JSON.stringify(previous));
+      form.append("symbols", JSON.stringify(pendingSymbols()));
+      form.append("session_positions", JSON.stringify(sessionPositions));
+      result = await api("/api/assistant/chat-image", {
+        method: "POST",headers: {"X-M3-Action":"local"},body:form
+      });
+      if (result.recognized_positions?.length) {
+        lastImagePositions = result.recognized_positions;
+        sessionPositions = result.recognized_positions;
+        $("imagePositionsReview").hidden = false;
+        setNote("imagePositionsNote", result.recognized_positions.length +
+          " positions were read from the image for this chat. Not saved; review before importing.");
+      } else {
+        $("imagePositionsReview").hidden = true;
+      }
+    } else {
+      result = await api("/api/assistant/chat", {
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({message,history:previous,symbols:pendingSymbols(),
+          session_positions:sessionPositions})
+      });
+    }
+    history.push({role:"user",content: message + (image ? " [image attached]" : "")});
+    bubble("assistant", result.answer);
+    history.push({role:"assistant",content:result.answer});
+    setNote("chatStatus", "Market checked " +
+      new Date(result.market_as_of).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}) +
+      " IST. Check contract matching and last-trade timestamps before trading.");
+    $("question").value = "";
+    $("chatImage").value = "";
+    $("chatImagePreview").textContent = "No image attached.";
+    $("removeChatImage").hidden = true;
+    refreshPositionQuotes();
+  } catch(error) {
+    bubble("assistant", "Unable to answer: " + error.message);
+    setNote("chatStatus", error.message);
+  } finally {chatBusy=false;$("sendQuestion").disabled=false;}
 }
-$("chatForm").addEventListener("submit", e => {e.preventDefault();const question=$("question").value.trim();if(!question)return;$("question").value="";sendQuestion(question);});
-document.querySelectorAll("[data-question]").forEach(button => button.addEventListener("click", () => sendQuestion(button.dataset.question)));
+$("chatForm").addEventListener("submit", e => {
+  e.preventDefault();sendQuestion($("question").value);
+});
+$("chatImage").addEventListener("change", () => {
+  const file = $("chatImage").files[0];
+  setNote("chatImagePreview", file ?
+    "Attached: " + file.name + " · " + (file.size / 1024).toFixed(0) + " KB" :
+    "No image attached.");
+  $("removeChatImage").hidden = !file;
+});
+$("removeChatImage").addEventListener("click", () => {
+  $("chatImage").value = "";
+  $("removeChatImage").hidden = true;
+  setNote("chatImagePreview","No image attached.");
+});
+$("useChatPositions").addEventListener("click",() => {
+  positions = lastImagePositions.map(p => ({...p}));
+  drawPositions();
+  setNote("positionsNote", "Image positions added to editor. Verify all rows, then save explicitly.");
+  $("positionRows").scrollIntoView({behavior:"smooth",block:"center"});
+});
+document.querySelectorAll("[data-question]").forEach(button =>
+  button.addEventListener("click", () => sendQuestion(button.dataset.question)));
 $("refreshMarket").addEventListener("click",loadMarket);
+$("refreshPositionsQuotes").addEventListener("click",refreshPositionQuotes);
+$("extraSymbols").addEventListener("change",refreshPositionQuotes);
 drawPositions();loadPositions();loadMarket();setInterval(loadMarket,15000);
