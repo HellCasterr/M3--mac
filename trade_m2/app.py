@@ -247,7 +247,16 @@ def build_app(settings: Settings | None = None) -> FastAPI:
     def assistant_chat(payload: ChatRequest, request: Request):
         paper_request(request)
         try:
-            market = indices.snapshot()
+            try:
+                market = indices.snapshot()
+            except AssistantError:
+                market = {
+                    "connected": False,
+                    "market_open": False,
+                    "indices": [],
+                    "as_of": datetime.now(IST).isoformat(),
+                    "notice": "Upstox index quotes temporarily unavailable; no live prices.",
+                }
             return answer_question(
                 payload.message, payload.history, assistant_notebook.list(), market
             )
