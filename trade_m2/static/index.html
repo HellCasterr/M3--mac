@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08110f">
+  <title>Trade M3 · Case 2 alerts</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/terminal.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">UPSTOX · NIFTY 200 · LIVE TICK CROSSINGS</p>
+        <h1>Trade M3</h1>
+        <p class="subtitle">Case 2 alerts at Point A and Point B—no retracement wait for inside-band opens.</p>
+      </div>
+      <div class="top-actions"><a class="button secondary" href="/assistant">Market assistant</a><a class="button secondary" href="/alerts-history">Alerts history</a>
+        <a href="/terminal" class="button secondary">Paper terminal</a>
+        <button id="notifyButton" class="button secondary">Enable browser alerts</button>
+        <a id="loginButton" class="button primary" href="/auth/upstox/login">Connect Upstox</a>
+      </div>
+    </header>
+
+    <section id="message" class="message hidden" role="status"></section>
+
+    <section class="status-grid" aria-label="System status">
+      <article class="status-card">
+        <span>UPSTOX</span>
+        <strong id="authStatus">Checking…</strong>
+        <small id="userName">OAuth required daily</small>
+      </article>
+      <article class="status-card">
+        <span>LIVE FEED</span>
+        <strong id="feedStatus">Stopped</strong>
+        <small id="feedDetail">0 subscriptions</small>
+      </article>
+      <article class="status-card">
+        <span>WATCHLIST</span>
+        <strong id="ruleCount">0 / 200</strong>
+        <small id="activeCount">0 active</small>
+      </article>
+      <article class="status-card">
+        <span>INDIA VIX RANGE</span>
+        <strong id="movementValue">—</strong>
+        <small id="movementDetail">Previous close ÷ 8.54400</small>
+      </article>
+    </section>
+
+    <section class="panel loader-panel">
+      <div>
+        <p class="section-label">TODAY'S UNIVERSE</p>
+        <h2>Load official Nifty 200</h2>
+        <p class="muted">Creates Point A and Point B from each stock's previous completed-session close, then subscribes to Upstox V3 LTPC.</p>
+      </div>
+      <div class="load-controls">
+        <label>
+          Range percentage
+          <input id="percentage" type="number" min="0.01" max="10" step="0.0001" placeholder="Auto from VIX">
+        </label>
+        <button id="loadButton" class="button primary">Load Nifty 200</button>
+      </div>
+      <div id="jobArea" class="job hidden">
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        <p id="jobText" class="muted"></p>
+      </div>
+    </section>
+
+    <section class="panel telegram-panel" aria-labelledby="telegramHeading">
+      <div class="panel-heading">
+        <div>
+          <p class="section-label">PHONE NOTIFICATIONS</p>
+          <h2 id="telegramHeading">Telegram alerts</h2>
+        </div>
+        <button id="telegramTestButton" class="button secondary" disabled>Send test to both chats</button>
+      </div>
+      <p id="telegramStatus" class="muted" role="status">Checking Telegram configuration…</p>
+      <div id="telegramRecipients" class="telegram-recipients"></div>
+      <p id="telegramTestResult" class="muted" role="status" aria-live="polite"></p>
+      <details>
+        <summary>Set up two recipients</summary>
+        <p class="muted">Add your bot token as <code>TELEGRAM_BOT_TOKEN</code> and two numeric chat IDs, separated by a comma, as <code>TELEGRAM_CHAT_IDS</code> in .env. Set <code>TELEGRAM_ENABLED=true</code>, then restart Trade M3. Each person must open your bot and tap Start first. Use chat IDs, not phone numbers or personal @usernames.</p>
+        <p class="muted">Telegram works while the browser is closed. Keep Trade M3 running and connected to Upstox. Alerts older than five minutes expire.</p>
+      </details>
+    </section>
+
+    <section class="panel" aria-labelledby="sectorHeading">
+      <div class="panel-heading"><h2 id="sectorHeading">Live sector context</h2><a class="button secondary" href="/api/review/export">Download alert history (CSV)</a></div>
+      <p class="muted">Equal-weight baskets of loaded Nifty 200 stocks, compared with previous official close. These are not NSE sector index returns. Updates every 5 seconds.</p>
+      <p id="sectorStatus" class="muted" role="status">Load Nifty 200 to start sector monitoring.</p>
+      <div class="table-wrap"><table><thead><tr><th>Sector</th><th>Mean move</th><th>Rising / fresh</th><th>Coverage</th><th>Bias</th></tr></thead><tbody id="sectorRows"></tbody></table></div>
+      <details><summary>How the labels work</summary><p class="muted">Bullish: mean ≥ +0.20% and ≥ 60% rising. Bearish: mean ≤ −0.20% and ≥ 60% falling. Otherwise mixed. At least 3 fresh stocks and 80% coverage required. Quotes expire after 45 seconds; closed markets show unavailable. These descriptive thresholds are unvalidated, not win probabilities. Broad Financial Services includes banks when banking membership cannot be retrieved.</p></details>
+    </section>
+
+    <section class="logic-grid">
+      <article class="logic-card long">
+        <span class="signal-tag">POINT A · LONG</span>
+        <h3>Upper crossing</h3>
+        <p>Open inside B–A → cross A upward. Or open above A → cross A downward.</p>
+      </article>
+      <article class="logic-card short">
+        <span class="signal-tag">POINT B · SHORT</span>
+        <h3>Lower crossing</h3>
+        <p>Open inside B–A → cross B downward. Or open below B → cross B upward.</p>
+      </article>
+      <article class="logic-card neutral">
+        <span class="signal-tag">GUARDRAILS</span>
+        <h3>One alert per boundary</h3>
+        <p>State persists in SQLite. Reconnect recovery skips any 3-minute candle that touched both levels.</p>
+      </article>
+    </section>
+
+    <section class="panel alert-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="section-label">REAL-TIME ALERTS</p>
+          <h2>Signal tape</h2>
+        </div>
+        <span id="alertCount" class="count-pill">0 alerts</span>
+      </div>
+      <div id="alerts" class="alert-list">
+        <div class="empty-state">No Case 2 crossings yet.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading rules-heading">
+        <div>
+          <p class="section-label">POINT A / POINT B</p>
+          <h2>Today's stocks</h2>
+        </div>
+        <div class="table-actions">
+          <input id="filter" type="search" placeholder="Filter symbol">
+          <button id="startAll" class="button small">Start all</button>
+          <button id="pauseAll" class="button small secondary">Pause all</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Stock</th><th>Reference</th><th>Open</th><th class="upper">Point A</th><th class="lower">Point B</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rulesBody"><tr><td colspan="7" class="empty-state">Load the Nifty 200 to begin.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p>Alerting and decision support only. This program does not place orders. Verify price, liquidity, and risk before trading.</p>
+      <a href="/api/docs">API docs</a>
+    </footer>
+  </main>
+  <dialog id="homeTicket"><form id="homeTicketForm"><p class="eyebrow">MANUAL OPTION PAPER TRADE</p><h2 id="homeTicketTitle">Review alert</h2><p id="homeTicketDetail">Fetching current option quote…</p><div class="settings-grid"><label>Budget / trade ₹<input id="homeBudget" type="number" min="1" step="100" required></label><label>Lots (0 = fit budget)<input id="homeLots" type="number" min="0" max="100" step="1" required></label><label>Target %<input id="homeTarget" type="number" min="0.01" max="100" step="0.1" required></label><label>Stop %<input id="homeStop" type="number" min="0.01" max="99" step="0.1" required></label><label>Max hold · minutes<input id="homeHold" type="number" min="1" max="360" step="1" required></label></div><p class="muted">Recovered alerts use the current option quote for this manual paper entry. No historical option price is reconstructed.</p><p id="homeTicketEstimate" class="muted"></p><p id="homeTicketError" role="alert"></p><div class="settings-actions"><button class="button primary" type="submit">Execute paper trade</button><button id="homePreviewRetry" class="button secondary" type="button">Refresh option quote</button><button id="homeTicketCancel" class="button secondary" type="button">Cancel</button></div></form></dialog>
+  <script src="/static/app.js?v=audit-tape-manual-v3" defer></script>
+</body>
+</html>

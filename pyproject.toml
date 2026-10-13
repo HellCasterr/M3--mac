@@ -1,0 +1,16 @@
+[project]
+name = "trade-m3"
+version = "1.1.0"
+description = "Nifty 200 sector alerts and paper-only options execution terminal"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

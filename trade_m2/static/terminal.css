@@ -1,0 +1,16 @@
+.terminal { max-width: 1500px; }
+.paper-badge {display:inline-flex;align-items:center;border:1px solid #56d3b0;background:#143c32;color:#9af1d8;border-radius:999px;padding:8px 14px;font-size:11px;font-weight:800;letter-spacing:.09em;white-space:nowrap}
+.terminal-notice {border-left:3px solid #56d3b0;padding:14px 18px;margin:22px 0;background:#10231f;color:#cce8e0;border-radius:4px;line-height:1.5}
+.terminal-notice.error {border-color:#f6a783;color:#ffcaaf}
+.settings-grid {display:grid;grid-template-columns:repeat(5,minmax(110px,1fr));gap:16px;margin:20px 0}
+.settings-grid label {display:flex;flex-direction:column;gap:8px;font-size:12px;color:#acbeb8}
+.settings-grid input {width:100%;min-width:0;color:#e6f4ec;border:1px solid #35483e;border-radius:8px;background:#0c1814;padding:11px;font:inherit;font-size:15px}
+.settings-actions {display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:20px}
+.checkbox {display:flex;gap:9px;align-items:center;font-size:13px;color:#c7ddd2}.checkbox input{width:18px;height:18px;accent-color:#62dfb5}
+.terminal details {margin-top:18px}.terminal summary{cursor:pointer;color:#99b8aa}
+.terminal-tabs{display:flex;gap:4px;margin:20px 0;border-bottom:1px solid #2a3e33;overflow:auto}.terminal-tabs button{white-space:nowrap;background:none;border:0;color:#91ac9e;padding:14px;cursor:pointer;font:inherit;font-size:13px}.terminal-tabs .selected{color:#a0f3d4;border-bottom:2px solid #64dbab}
+.signal-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.signal-card{padding:16px;background:#0d1c16;border:1px solid #253a2e;border-radius:10px}.signal-card h3{margin:0 0 8px;font-size:15px}.signal-card p{font-size:12px;line-height:1.6;margin:6px 0 12px;color:#9db5a7}.signal-card .button{font-size:12px;padding:7px 12px}
+.terminal td{vertical-align:top}.terminal .number{font-variant-numeric:tabular-nums;white-space:nowrap}.positive{color:#7ee2b7}.negative{color:#ffa38b}.uncertain{color:#f1c77c}.terminal-footnote{line-height:1.7;font-size:12px;margin:24px 0}
+#ticketDialog,#homeTicket{width:min(760px,94vw);border:1px solid #436954;border-radius:16px;background:#10251b;color:#edf6f0;padding:28px}#ticketDialog::backdrop,#homeTicket::backdrop{background:#000b}#ticketDialog h2,#homeTicket h2{font-size:24px}#ticketDialog .settings-grid,#homeTicket .settings-grid{grid-template-columns:repeat(3,1fr)}#ticketError,#homeTicketError{color:#ffa58e}
+@media(max-width:900px){.settings-grid{grid-template-columns:repeat(3,1fr)}.signal-list{grid-template-columns:1fr}}
+@media(max-width:560px){.settings-grid,#ticketDialog .settings-grid,#homeTicket .settings-grid{grid-template-columns:repeat(2,1fr)}.account-grid{grid-template-columns:repeat(2,1fr)}.terminal .hero{gap:18px}.terminal .top-actions{flex-wrap:wrap}.status-card strong{font-size:22px}.settings-actions .button{width:100%}}
